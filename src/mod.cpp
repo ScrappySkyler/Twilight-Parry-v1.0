@@ -35,12 +35,9 @@
 #endif
 
 #if AUDIO_SCAN
-#include <mutex>
-#include <set>
 #include <map>
 #include <string>
 #include <cstdio>
-#include <atomic>
 #endif
 
 DEFINE_MOD();
@@ -211,29 +208,37 @@ static void on_shield_guard_post(ModContext*, void* args, void*, void*) {
 // Hazlo parado en un lugar tranquilo, sin enemigos. El resultado sale en el registro del mod.
 #if AUDIO_SCAN
 static const int SCAN_TICKS = 20;
-static std::mutex g_scanMutex;
-static std::set<std::pair<uintptr_t, uint32_t>> g_scanSeen;   // (banco, id de muestra)
-static std::atomic<bool> g_scanActive{false};
+static const int SCAN_MAX = 512;
+struct ScanEntry { uintptr_t bank; uint32_t id; };
+static ScanEntry g_scanBuf[SCAN_MAX];        // (banco, id de muestra) sin repetir
+static volatile int g_scanCount = 0;
+static volatile bool g_scanActive = false;
 static int g_scanTicks = 0;
 static const char* g_scanLabel = "";
 
+// Puede llamarse desde el hilo de audio; como es solo una herramienta de diagnostico,
+// no usa candados (un choque raro solo perderia un dato).
 static HookAction on_scan_wave(ModContext*, void* args, void*, void*) {
-    if (!g_scanActive.load()) return HOOK_CONTINUE;
+    if (!g_scanActive) return HOOK_CONTINUE;
     uintptr_t bank = (uintptr_t)mods::arg<void*>(args, 0);
     uint32_t id = mods::arg<uint32_t>(args, 1);
-    std::lock_guard<std::mutex> lock(g_scanMutex);
-    g_scanSeen.insert({bank, id});
+    int n = g_scanCount;
+    for (int i = 0; i < n; i++) {
+        if (g_scanBuf[i].bank == bank && g_scanBuf[i].id == id) return HOOK_CONTINUE;
+    }
+    if (n < SCAN_MAX) {
+        g_scanBuf[n].bank = bank;
+        g_scanBuf[n].id = id;
+        g_scanCount = n + 1;
+    }
     return HOOK_CONTINUE;
 }
 
 static void scan_start(daAlink_c* link, const char* label, bool playMidna, bool playTitle) {
-    {
-        std::lock_guard<std::mutex> lock(g_scanMutex);
-        g_scanSeen.clear();
-    }
+    g_scanCount = 0;
     g_scanLabel = label;
     g_scanTicks = SCAN_TICKS;
-    g_scanActive.store(true);
+    g_scanActive = true;
     if (playMidna) link->setPlayerSe(Z2SE_MIDNA_JUMP);
     if (playTitle) link->setPlayerSe(Z2SE_TITLE_ENTER);
 }
@@ -245,12 +250,10 @@ static void scan_tick(daAlink_c* link) {
         else if (mDoCPd_c::getTrigX(PAD_1)) scan_start(link, "NADA (base)", false, false);
     }
     if (g_scanTicks > 0 && --g_scanTicks == 0) {
-        g_scanActive.store(false);
+        g_scanActive = false;
         std::map<uintptr_t, std::vector<uint32_t>> banks;
-        {
-            std::lock_guard<std::mutex> lock(g_scanMutex);
-            for (auto& p : g_scanSeen) banks[p.first].push_back(p.second);
-        }
+        int count = g_scanCount;
+        for (int i = 0; i < count; i++) banks[g_scanBuf[i].bank].push_back(g_scanBuf[i].id);
         char head[96];
         snprintf(head, sizeof(head), "SCAN [%s]: %d banco(s)", g_scanLabel, (int)banks.size());
         svc_log->info(mod_ctx, head);
