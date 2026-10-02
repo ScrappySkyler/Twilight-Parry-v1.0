@@ -11,7 +11,8 @@
 //   solo se puede golpear al enemigo cuando queda aturdido (barra llena).
 
 #define ENABLE_BAR 1   // 1 = dibuja la barra sobre el enemigo, 0 = sin barra (solo sonidos)
-#define AUDIO_SCAN 1   // 1 = herramienta para encontrar el ID del sonido (temporal), 0 = apagada
+#define AUDIO_SCAN 0   // 1 = herramienta para encontrar el ID del sonido (temporal), 0 = apagada
+#define AUDIO_REPLACE 1   // 1 = reemplaza el sonido del parry por res/parry_success.wav
 
 #include <unordered_map>
 #include <vector>
@@ -34,6 +35,10 @@
 #include <dolphin/gx.h>
 #endif
 
+#if AUDIO_REPLACE
+#include "mods/svc/audio_res.h"
+#endif
+
 #if AUDIO_SCAN
 #include <map>
 #include <string>
@@ -43,6 +48,9 @@
 DEFINE_MOD();
 IMPORT_SERVICE(LogService, svc_log);
 IMPORT_SERVICE(HookService, svc_hook);
+#if AUDIO_REPLACE
+IMPORT_OPTIONAL_SERVICE(AudioResService, svc_audio_res);   // si falta, el mod carga igual, sin el sonido
+#endif
 
 DEFINE_HOOK(&daAlink_c::execute, LinkExecute);
 DEFINE_HOOK(&daAlink_c::procGuardAttackInit, GuardAttackInit);
@@ -83,6 +91,12 @@ static const float BAR_HEIGHT_ABOVE_HEAD = 60.0f;  // altura sobre la cabeza (un
 static const float BAR_WIDTH = 120.0f;             // ancho en pixeles
 static const float POS_SMOOTHING = 0.40f;          // 0-1: menor = mas suave (y mas retraso)
 static const float FILL_SMOOTHING = 0.18f;         // velocidad a la que se llena la barra
+
+#if AUDIO_REPLACE
+// Muestra de audio que se reemplaza (la encontrada con la herramienta de escaneo).
+static const AudioWaveBank PARRY_WAVE_BANK = AUDIO_WAVE_BANK_MUSIC_SAMPLES;
+static const uint16_t PARRY_WAVE_ID = 172;
+#endif
 
 // Valores del enum de tajos finales (Mortal Draw A y B)
 static const int MORTAL_DRAW_A = 3;
@@ -525,6 +539,17 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
 #if ENABLE_BAR
     if ((r = mods::hook::add_post<LinkDraw>(on_link_draw_post)) != MOD_OK)
         return mods::set_error(error, r, "hook dibujo de Link");
+#endif
+#if AUDIO_REPLACE
+    if (svc_audio_res != nullptr) {
+        AudioWaveHandle waveHandle = 0;
+        ModResult ar = svc_audio_res->replace_wave(
+            mod_ctx, PARRY_WAVE_BANK, PARRY_WAVE_ID, "res/parry_success.wav", nullptr, &waveHandle);
+        if (ar != MOD_OK) svc_log->warn(mod_ctx, "AUDIO: no pude reemplazar la muestra de sonido");
+        else svc_log->info(mod_ctx, "AUDIO: muestra reemplazada");
+    } else {
+        svc_log->warn(mod_ctx, "AUDIO: esta version de Dusklight no tiene el servicio de audio");
+    }
 #endif
 #if AUDIO_SCAN
     // Si alguno falla, solo avisa: el resto del mod sigue funcionando.
