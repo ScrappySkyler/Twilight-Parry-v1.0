@@ -41,9 +41,6 @@
 #include <string>
 #include <cstdio>
 #include <atomic>
-#include "JSystem/JAudio2/JASWaveBank.h"
-#include "JSystem/JAudio2/JASBasicWaveBank.h"
-#include "JSystem/JAudio2/JASSimpleWaveBank.h"
 #endif
 
 DEFINE_MOD();
@@ -72,8 +69,8 @@ DEFINE_HOOK(&daAlink_c::setCutDash, CutDash);
 DEFINE_HOOK(&daAlink_c::draw, LinkDraw);
 #endif
 #if AUDIO_SCAN
-DEFINE_HOOK(&JASBasicWaveBank::getWaveHandle, ScanBasicWave);
-DEFINE_HOOK(&JASSimpleWaveBank::getWaveHandle, ScanSimpleWave);
+DEFINE_HOOK_SYMBOL("JASBasicWaveBank::getWaveHandle", void*(void*, uint32_t), ScanBasicWave);
+DEFINE_HOOK_SYMBOL("JASSimpleWaveBank::getWaveHandle", void*(void*, uint32_t), ScanSimpleWave);
 #endif
 
 // ---- Ajustes (ticks de logica: 30 por segundo) ----
