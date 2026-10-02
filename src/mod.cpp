@@ -11,7 +11,7 @@
 //   solo se puede golpear al enemigo cuando queda aturdido (barra llena).
 
 #define ENABLE_BAR 1   // 1 = dibuja la barra sobre el enemigo, 0 = sin barra (solo sonidos)
-#define AUDIO_SCAN 0   // 1 = herramienta para encontrar el ID del sonido (temporal), 0 = apagada
+#define AUDIO_SCAN 1   // 1 = herramienta para encontrar el ID del sonido (temporal), 0 = apagada
 
 #include <unordered_map>
 #include <vector>
