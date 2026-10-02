@@ -28,6 +28,7 @@
 #include "d/d_com_inf_game.h"
 #include "f_op/f_op_actor_mng.h"
 #include "m_Do/m_Do_controller_pad.h"
+#include "m_Do/m_Do_audio.h"
 #include "SSystem/SComponent/c_math.h"
 
 #if ENABLE_BAR
@@ -108,6 +109,10 @@ static const AudioWaveBank PARRY_WAVE_BANK = AUDIO_WAVE_BANK_MUSIC_SAMPLES;
 static const uint16_t PARRY_WAVE_ID = 172;
 #endif
 
+// Sonido del tercer parry (el que llena la barra): numero del sonido del juego encontrado
+// con el registro (el del final del salto de Midna). Si no es el que quieres, prueba 165.
+static const uint32_t STUN_SE_ID = 164;
+
 // Valores del enum de tajos finales (Mortal Draw A y B)
 static const int MORTAL_DRAW_A = 3;
 static const int MORTAL_DRAW_B = 4;
@@ -181,7 +186,8 @@ static HookAction on_guard_se_pre(ModContext*, void* args, void*, void*) {
     // Parry que no llena la barra: no se puede atacar un rato. Si se lleno, se libera.
     g_attackLock = (stunnedNow || !lockAttacks) ? 0 : ATTACK_LOCK_TICKS;
 
-    link->setPlayerSe(stunnedNow ? Z2SE_TITLE_ENTER : Z2SE_MIDNA_JUMP);
+    if (stunnedNow) mDoAud_seStart(STUN_SE_ID, nullptr, 0, 0);
+    else link->setPlayerSe(Z2SE_MIDNA_JUMP);
     dComIfGp_getVibration().StartShock(VIBMODE_S_POWER4, 1, cXyz(0.0f, 1.0f, 0.0f));
 
     svc_log->info(mod_ctx, stunnedNow ? "PARRY: enemigo aturdido" : "PARRY");
