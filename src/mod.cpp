@@ -201,10 +201,10 @@ static void on_shield_guard_post(ModContext*, void* args, void*, void*) {
 }
 
 // ======================= HERRAMIENTA: BUSCAR ID DE SONIDO =======================
-// Temporal. Mantener R y presionar:
-//   Z = reproduce el sonido MIDNA_JUMP y anota que muestras de audio se piden
-//   Y = reproduce el sonido TITLE_ENTER y anota lo mismo
-//   X = no reproduce nada (linea base, para descartar la musica y el ambiente)
+// Temporal. Mantener R y presionar Y (varias veces). Cada pulsacion hace una prueba distinta:
+//   1 = no reproduce nada (linea base, para descartar la musica y el ambiente)
+//   2 = reproduce MIDNA_JUMP y anota que muestras de audio se piden
+//   3 = reproduce TITLE_ENTER y anota lo mismo
 // Hazlo parado en un lugar tranquilo, sin enemigos. El resultado sale en el registro del mod.
 #if AUDIO_SCAN
 static const int SCAN_TICKS = 20;
@@ -214,6 +214,7 @@ static ScanEntry g_scanBuf[SCAN_MAX];        // (banco, id de muestra) sin repet
 static volatile int g_scanCount = 0;
 static volatile bool g_scanActive = false;
 static int g_scanTicks = 0;
+static int g_scanStep = 0;
 static const char* g_scanLabel = "";
 
 // Puede llamarse desde el hilo de audio; como es solo una herramienta de diagnostico,
@@ -244,10 +245,12 @@ static void scan_start(daAlink_c* link, const char* label, bool playMidna, bool 
 }
 
 static void scan_tick(daAlink_c* link) {
-    if (g_scanTicks == 0 && mDoCPd_c::getHoldR(PAD_1)) {
-        if (mDoCPd_c::getTrigZ(PAD_1)) scan_start(link, "MIDNA_JUMP", true, false);
-        else if (mDoCPd_c::getTrigY(PAD_1)) scan_start(link, "TITLE_ENTER", false, true);
-        else if (mDoCPd_c::getTrigX(PAD_1)) scan_start(link, "NADA (base)", false, false);
+    bool r = mDoCPd_c::getHoldR(PAD_1);
+    bool l = mDoCPd_c::getHoldL(PAD_1);
+    if (g_scanTicks == 0 && mDoCPd_c::getTrigY(PAD_1)) {
+        if (r && l) scan_start(link, "NADA (base)", false, false);
+        else if (r) scan_start(link, "TITLE_ENTER", false, true);
+        else if (l) scan_start(link, "MIDNA_JUMP", true, false);
     }
     if (g_scanTicks > 0 && --g_scanTicks == 0) {
         g_scanActive = false;
