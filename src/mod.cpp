@@ -12,7 +12,8 @@
 
 #define ENABLE_BAR 1   // 1 = dibuja la barra sobre el enemigo, 0 = sin barra (solo sonidos)
 #define AUDIO_SCAN 0   // 1 = herramienta para encontrar el ID del sonido (temporal), 0 = apagada
-#define AUDIO_REPLACE 1   // 1 = reemplaza el sonido del parry por res/parry_success.wav
+#define AUDIO_REPLACE 0   // 1 = reemplaza el sonido del parry por res/parry_success.wav (descartado)
+#define SOUND_LOG 1       // 1 = anota en el registro el ID de cada sonido que suena (temporal), 0 = apagado
 
 #include <unordered_map>
 #include <vector>
@@ -37,6 +38,12 @@
 
 #if AUDIO_REPLACE
 #include "mods/svc/audio_res.h"
+#endif
+
+#if SOUND_LOG
+#include <map>
+#include <cstdio>
+#include "Z2AudioLib/Z2SeMgr.h"
 #endif
 
 #if AUDIO_SCAN
@@ -72,6 +79,9 @@ DEFINE_HOOK(&daAlink_c::procCutLargeJumpInit, CutLargeJumpInit);
 DEFINE_HOOK(&daAlink_c::setCutDash, CutDash);
 #if ENABLE_BAR
 DEFINE_HOOK(&daAlink_c::draw, LinkDraw);
+#endif
+#if SOUND_LOG
+DEFINE_HOOK(&Z2SeMgr::seStart, SeStartLog);
 #endif
 #if AUDIO_SCAN
 DEFINE_HOOK_SYMBOL("JASBasicWaveBank::getWaveHandle", void*(void*, uint32_t), ScanBasicWave);
@@ -214,6 +224,31 @@ static void on_shield_guard_post(ModContext*, void* args, void*, void*) {
     GuardHelper::remove_auto_guard(mods::arg<daAlink_c*>(args, 0));
 }
 
+// ======================= HERRAMIENTA: REGISTRO DE SONIDOS =======================
+// Temporal. Anota en el registro del mod el numero de cada sonido que el juego reproduce.
+// Uso: abre el registro, pulsa Clear, haz lo que quieras identificar (por ejemplo, llegar a
+// Midna con el salto) y mira que numeros aparecieron. Un mismo sonido no se repite
+// en menos de 20 ticks para no llenar el registro.
+#if SOUND_LOG
+static int g_tick = 0;
+static std::map<uint32_t, int> g_lastLogged;
+
+static HookAction on_se_start_log(ModContext*, void* args, void*, void*) {
+    uint32_t raw = mods::arg<uint32_t>(args, 1);   // arg 0 = this, arg 1 = ID del sonido
+    auto it = g_lastLogged.find(raw);
+    if (it != g_lastLogged.end() && g_tick - it->second < 20) {
+        it->second = g_tick;
+        return HOOK_CONTINUE;
+    }
+    g_lastLogged[raw] = g_tick;
+    char buf[128];
+    snprintf(buf, sizeof(buf), "SND %u (hex 0x%08X: seccion %u, grupo %u, id %u)",
+             raw, raw, raw >> 24, (raw >> 16) & 0xFF, raw & 0xFFFF);
+    svc_log->info(mod_ctx, buf);
+    return HOOK_CONTINUE;
+}
+#endif  // SOUND_LOG
+
 // ======================= HERRAMIENTA: BUSCAR ID DE SONIDO =======================
 // Temporal. Mantener R y presionar Y (varias veces). Cada pulsacion hace una prueba distinta:
 //   1 = no reproduce nada (linea base, para descartar la musica y el ambiente)
@@ -295,6 +330,9 @@ static HookAction on_execute_pre(ModContext*, void* args, void*, void*) {
 
     if (g_parryTimer > 0) g_parryTimer--;
     if (g_attackLock > 0) g_attackLock--;
+#if SOUND_LOG
+    g_tick++;
+#endif
 #if AUDIO_SCAN
     scan_tick(link);
 #endif
@@ -539,6 +577,10 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
 #if ENABLE_BAR
     if ((r = mods::hook::add_post<LinkDraw>(on_link_draw_post)) != MOD_OK)
         return mods::set_error(error, r, "hook dibujo de Link");
+#endif
+#if SOUND_LOG
+    if (mods::hook::add_pre<SeStartLog>(on_se_start_log) != MOD_OK)
+        svc_log->warn(mod_ctx, "SND: no pude hookear Z2SeMgr::seStart");
 #endif
 #if AUDIO_REPLACE
     if (svc_audio_res != nullptr) {
