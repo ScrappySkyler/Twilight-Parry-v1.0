@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstdint>
+#include <cstdio>
 #include <cmath>
 
 #include "mods/service.hpp"
@@ -110,8 +111,11 @@ static const uint16_t PARRY_WAVE_ID = 172;
 #endif
 
 // Sonido del tercer parry (el que llena la barra): numero del sonido del juego encontrado
-// con el registro (el del final del salto de Midna). Si no es el que quieres, prueba 165.
-static const uint32_t STUN_SE_ID = 164;
+// con el registro. Pon 0 para usar el sonido normal.
+static const uint32_t STUN_SE_ID = 0;   // cuando encuentres el sonido bueno, ponlo aqui (0 = modo de prueba)
+#define STUN_SE_TEST 1                  // 1 = en cada aturdimiento prueba un sonido distinto de la lista
+static const uint32_t STUN_SE_TEST_LIST[] = {90, 89, 88, 94, 87, 86, 14};
+static const int STUN_SE_TEST_COUNT = 7;
 
 // Valores del enum de tajos finales (Mortal Draw A y B)
 static const int MORTAL_DRAW_A = 3;
@@ -186,8 +190,23 @@ static HookAction on_guard_se_pre(ModContext*, void* args, void*, void*) {
     // Parry que no llena la barra: no se puede atacar un rato. Si se lleno, se libera.
     g_attackLock = (stunnedNow || !lockAttacks) ? 0 : ATTACK_LOCK_TICKS;
 
-    if (stunnedNow) mDoAud_seStart(STUN_SE_ID, nullptr, 0, 0);
-    else link->setPlayerSe(Z2SE_MIDNA_JUMP);
+    if (stunnedNow) {
+        uint32_t seId = STUN_SE_ID;
+#if STUN_SE_TEST
+        static int s_testIdx = 0;
+        if (seId == 0) {
+            seId = STUN_SE_TEST_LIST[s_testIdx % STUN_SE_TEST_COUNT];
+            char msg[64];
+            snprintf(msg, sizeof(msg), "STUN: probando el sonido %u", seId);
+            svc_log->info(mod_ctx, msg);
+            s_testIdx++;
+        }
+#endif
+        if (seId != 0) mDoAud_seStart(seId, nullptr, 0, 0);
+        else link->setPlayerSe(Z2SE_TITLE_ENTER);
+    } else {
+        link->setPlayerSe(Z2SE_MIDNA_JUMP);
+    }
     dComIfGp_getVibration().StartShock(VIBMODE_S_POWER4, 1, cXyz(0.0f, 1.0f, 0.0f));
 
     svc_log->info(mod_ctx, stunnedNow ? "PARRY: enemigo aturdido" : "PARRY");
@@ -232,25 +251,33 @@ static void on_shield_guard_post(ModContext*, void* args, void*, void*) {
 
 // ======================= HERRAMIENTA: REGISTRO DE SONIDOS =======================
 // Temporal. Anota en el registro del mod el numero de cada sonido que el juego reproduce.
-// Uso: abre el registro, pulsa Clear, haz lo que quieras identificar (por ejemplo, llegar a
-// Midna con el salto) y mira que numeros aparecieron. Un mismo sonido no se repite
-// en menos de 20 ticks para no llenar el registro.
+// Uso: deja el juego quieto unos 20 segundos (para que los ruidos de ambiente se anoten y se
+// silencien), pulsa Clear, haz lo que quieras identificar y mira que numeros NUEVOS aparecen.
 #if SOUND_LOG
 static int g_tick = 0;
-static std::map<uint32_t, int> g_lastLogged;
+static std::map<uint64_t, int> g_soundCount;   // veces que se ha anotado cada sonido
 
-static HookAction on_se_start_log(ModContext*, void* args, void*, void*) {
-    uint32_t raw = mods::arg<uint32_t>(args, 1);   // arg 0 = this, arg 1 = ID del sonido
-    auto it = g_lastLogged.find(raw);
-    if (it != g_lastLogged.end() && g_tick - it->second < 20) {
-        it->second = g_tick;
-        return HOOK_CONTINUE;
-    }
-    g_lastLogged[raw] = g_tick;
-    char buf[128];
-    snprintf(buf, sizeof(buf), "SND %u (hex 0x%08X: seccion %u, grupo %u, id %u)",
-             raw, raw, raw >> 24, (raw >> 16) & 0xFF, raw & 0xFFFF);
+static uint32_t swap32(uint32_t v) {
+    return (v >> 24) | ((v >> 8) & 0xFF00u) | ((v << 8) & 0xFF0000u) | (v << 24);
+}
+
+// Cada sonido se anota solo las 2 primeras veces: asi los ruidos de ambiente que se repiten
+// dejan de salir y solo se ven los sonidos NUEVOS (por ejemplo, el del exito del salto).
+// "numero" es el valor que se puede pasar a mDoAud_seStart para reproducirlo.
+static void log_sound(char kind, const char* label, uint32_t number) {
+    uint64_t key = ((uint64_t)(unsigned char)kind << 32) | number;
+    int& n = g_soundCount[key];
+    if (++n > 2) return;
+    char buf[160];
+    snprintf(buf, sizeof(buf), "SND[%s] numero %u (hex 0x%08X: seccion %u, grupo %u, id %u)%s",
+             label, number, number, number >> 24, (number >> 16) & 0xFF, number & 0xFFFF,
+             n == 2 ? " (2da vez)" : "");
     svc_log->info(mod_ctx, buf);
+}
+
+// Efectos de sonido globales
+static HookAction on_se_start_log(ModContext*, void* args, void*, void*) {
+    log_sound('S', "efecto", swap32(mods::arg<uint32_t>(args, 1)));
     return HOOK_CONTINUE;
 }
 #endif  // SOUND_LOG
