@@ -162,11 +162,18 @@ static HookAction on_guard_se_pre(ModContext*, void* args, void*, void*) {
         }
     }
 
-    // Parry que no llena la barra: no se puede atacar un rato. Si se lleno, se libera.
+        // Parry que no llena la barra: no se puede atacar un rato. Si se lleno, se libera.
     g_attackLock = (stunnedNow || !lockAttacks) ? 0 : ATTACK_LOCK_TICKS;
 
-    link->setPlayerSe(stunnedNow ? Z2SE_TITLE_ENTER : Z2SE_MIDNA_JUMP);
-    dComIfGp_getVibration().StartShock(VIBMODE_S_POWER4, 1, cXyz(0.0f, 1.0f, 0.0f));
+    if (stunnedNow) {
+        // 3er parry: sonido especial de final de salto / stun
+        link->setPlayerSe(Z2SE_MIDNA_JUMP_FINISH);
+        dComIfGp_getVibration().StartShock(VIBMODE_S_POWER4, 2, cXyz(0.0f, 1.0f, 0.0f));
+    } else {
+        // 1er y 2do parry: sonido normal
+        link->setPlayerSe(Z2SE_MIDNA_JUMP);
+        dComIfGp_getVibration().StartShock(VIBMODE_S_POWER4, 1, cXyz(0.0f, 1.0f, 0.0f));
+    }
 
     svc_log->info(mod_ctx, stunnedNow ? "PARRY: enemigo aturdido" : "PARRY");
     return HOOK_CONTINUE;
