@@ -1,7 +1,7 @@
 {
-  "id": "com.example.my_mod",
-  "name": "midna",
-  "version": "@PROJECT_VERSION@",
-  "author": "You",
-  "description": "An example Dusklight mod"
+  "id": "com.example.parry",
+  "name": "Twilight Parry",
+  "version": "v1.5",
+  "author": "ScrappySkyler",
+  "description": "Parry system: This mod disables auto-blocking for greater immersion. The parry is activated by pressing the R trigger (shield bash). The enemy will then be stunned, allowing you to follow up with a maximum of two Mortal Draws. This update In this v1.5 update, the sound effect for the third parry was replaced with the Midna jump finish."
 }
