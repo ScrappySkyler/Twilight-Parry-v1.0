@@ -112,7 +112,7 @@ static const uint16_t PARRY_WAVE_ID = 172;
 
 // Sonido del tercer parry (el que llena la barra): numero del sonido del juego encontrado
 // con el registro. Pon 0 para usar el sonido normal.
-static const uint32_t STUN_SE_ID = 0;   // cuando encuentres el sonido bueno, ponlo aqui (0 = modo de prueba)
+static const uint32_t STUN_SE_ID = 88;   // cuando encuentres el sonido bueno, ponlo aqui (0 = modo de prueba)
 #define STUN_SE_TEST 1                  // 1 = en cada aturdimiento prueba un sonido distinto de la lista
 static const uint32_t STUN_SE_TEST_LIST[] = {90, 89, 88, 94, 87, 86, 14};
 static const int STUN_SE_TEST_COUNT = 7;
